@@ -1,0 +1,66 @@
+plugins {
+    id 'java-library'
+    id 'application'
+}
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+ext {
+
+	/* Load MinGW path from gradle.properties and add it in front of the global PATH variable. (Make gcc executable in this environment) */
+	customPath = MINGW + System.getProperty("path.separator") + "$System.env.PATH"
+	
+	/* Load path to JDK from gradle.properties. */
+	javaHome = JAVA_HOME
+}
+
+repositories {
+    jcenter()
+}
+
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+task buildresources(type: Exec, group: 'build', description: 'The gcc build task.'){
+	
+	dependsOn build
+	mustRunAfter build
+	
+	workingDir 'src/main/c/'
+    environment "PATH", customPath
+    
+    commandLine 'windres', 'resources.rc', '-O', 'coff', '-o', 'resources.res'
+}
+
+task makenativeexec(type: Exec, group: 'build', description: 'The gcc build task.'){
+	
+	dependsOn buildresources
+	mustRunAfter buildresources
+	
+	workingDir 'src/main/c/'
+    environment "PATH", customPath
+    
+	commandLine 'gcc.exe',
+	'-I"' + javaHome + '\\include"',
+	'-I"' + javaHome + '\\include\\win32"',
+	'-o', "$buildDir" + '/runme.exe',
+	'-Wall',
+	'-pedantic',
+	'-municode',
+	// '-mwindows',
+	'main.c', 'java.c', 'logging.c', 'resources.res',
+	'-L"' + javaHome + '\\lib"',
+	'-ljvm',
+	
+	standardOutput = new ByteArrayOutputStream()
+	ext.output = {
+		return standardOutput.toString()
+	}
+}

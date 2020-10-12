@@ -1,0 +1,15 @@
+# Ignore Gradle project-specific cache directory
+.gradle
+
+# Ignore Gradle build output directory
+build
+bin
+
+# Ignore Eclipse project-specific cache directory
+.project
+.classpath
+.settings
+.dbeaver
+
+# Ignore gradle.properties because this is different per user
+gradle.properties
