@@ -7,14 +7,15 @@ sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
 ext {
-
-	/* Load MinGW path from gradle.properties and add it in front of the global PATH variable. (Make gcc executable in this environment) */
-	customPath = MINGW + System.getProperty("path.separator") + "$System.env.PATH"
+	
+	gcc = MINGW + System.getProperty("file.separator") + 'gcc.exe'
+	windres = MINGW + System.getProperty("file.separator") + 'windres.exe'
+	execPath = MINGW + System.getProperty("path.separator") + System.getenv("PATH")
 	
 	/* Load path to JDK from gradle.properties. */
 	javaHome = JAVA_HOME
 	
-	mainClass = 'goa.systems.esp.EspServer'
+	mainClass = 'compilerex.Library'
 	
 	junitvers = '5.7.0'
 }
@@ -46,51 +47,97 @@ jar {
 	}
 }
 
-task buildresources(type: Exec, group: 'build', description: 'The gcc build task.'){
-	
+build.dependsOn clean
+build.mustRunAfter clean
+
+task exportDependencies(type: Copy, group: 'distribution', description: 'Exports the application dependencies into a export folder.') {
+
 	dependsOn build
 	mustRunAfter build
 	
-	workingDir 'src/main/c/'
-    environment "PATH", customPath
-    
-    commandLine 'windres', 'resources.rc', '-O', 'coff', '-o', 'resources.res'
+	into "${buildDir}/setup/lib"
+	from configurations.runtimeClasspath
 }
 
-/* Work in progress. */
+tasks.withType(Jar) {
+	destinationDirectory = file("${buildDir}/setup/lib")
+}
+
+/* Deletes an probably existing "java.c" file in "src/main/c" folder. */
+task cleanJavaC(type: Delete, group: 'build', description: 'The gcc build task.') {
+
+	dependsOn exportDependencies
+	mustRunAfter exportDependencies
+	
+	delete 'src/main/c/java.c'
+}
+
+/* Generates a java.c file from the template with the main class name inserted. */
 task generateJavaC(type: Copy, group: 'build', description: 'The gcc build task.') {
-	from filetree('src/main/c') {
-		include 'java.gen.c'
-        filter{ it.replaceAll('%%MAIN_CLASS%%', 'asdf')}
-    }.files
-	into 'src/main/c'
-	rename { filename ->
-        filename.replace 'java.gen.c', 'java.c'
+	
+	dependsOn cleanJavaC
+	mustRunAfter cleanJavaC
+	
+	from("src/main/c"){
+      include "java.tpl.c"
+      filter{ it.replaceAll('%%MAIN_CLASS%%', mainClass.replaceAll( '\\.', '/' ))}
+	}
+	into("src/main/c")
+	rename('java.tpl.c', 'java.c')
+}
+
+/* Deletes an probably existing "java.c" file in "src/main/c" folder. */
+task cleanResources(type: Delete, group: 'build', description: '') {
+
+	dependsOn generateJavaC
+	mustRunAfter generateJavaC
+	
+	doLast {
+        
+        delete 'src/main/c/resources.res'
+		"$buildDir" + '/setup/bin'
+
+		mkdir "$buildDir/setup/bin"
+		mkdir "$buildDir/setup/lib"
+		mkdir "$buildDir/setup/conf"
     }
 }
 
-task makenativeexec(type: Exec, group: 'build', description: 'The gcc build task.'){
+task buildResources(type: Exec, group: 'build', description: ''){
+    
+	dependsOn cleanResources
+	mustRunAfter cleanResources
+
+	workingDir 'src/main/c/'
+    environment "PATH", execPath
+
+    commandLine windres, 'resources.rc', '-O', 'coff', '-o', 'resources.res'
+}
+
+task makenativeexec(type: Exec, group: 'build', description: ''){
 	
-	dependsOn buildresources
-	mustRunAfter buildresources
+	dependsOn buildResources
+	mustRunAfter buildResources
 	
 	workingDir 'src/main/c/'
-    environment "PATH", customPath
+    environment "PATH", execPath
     
-	commandLine 'gcc.exe',
+	commandLine gcc,
 	'-I"' + javaHome + '\\include"',
 	'-I"' + javaHome + '\\include\\win32"',
-	'-o', "$buildDir" + '/runme.exe',
+	'-o', "$buildDir/setup/bin/" + 'runme.exe',
 	'-Wall',
+	'-Os',
 	'-pedantic',
 	'-municode',
-	// '-mwindows',
+	'-mwindows',
 	'main.c', 'java.c', 'logging.c', 'resources.res',
 	'-L"' + javaHome + '\\lib"',
-	'-ljvm',
+	'-ljvm'
 	
 	standardOutput = new ByteArrayOutputStream()
 	ext.output = {
 		return standardOutput.toString()
 	}
+	
 }

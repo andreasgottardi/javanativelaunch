@@ -10,6 +10,7 @@ int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int n
 	int nrofargs;
 	szArglist = CommandLineToArgvW(GetCommandLineW(), &nrofargs);
 	char libdir[MAX_PATH];
+	libdir[0] = '\0';
 
 	for (size_t i = 0; i < nrofargs; i++) {
 		if(wcscmp(L"-l", szArglist[i]) == 0){
@@ -17,6 +18,11 @@ int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int n
 			i++;
 		}
 	}
-	startvm(libdir);
+
+	if(strlen(libdir) == 0) {
+		startvm("..\\lib");
+	} else {
+		startvm(libdir);
+	}
 	return 0;
 }

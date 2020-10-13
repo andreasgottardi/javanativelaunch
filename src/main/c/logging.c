@@ -19,6 +19,8 @@ int WriteToLog(char *str, DWORD mode)
 		lmt = "INFO";
 	} else if (mode == LOG_DEBUG) {
 		lmt = "DEBUG";
+	} else {
+		lmt = "UNKNOWN_TAG";
 	}
 
 	time(&timer);
