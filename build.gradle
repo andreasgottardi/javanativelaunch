@@ -114,10 +114,20 @@ task buildResources(type: Exec, group: 'build', description: ''){
     commandLine windres, 'resources.rc', '-O', 'coff', '-o', 'resources.res'
 }
 
-task makenativeexec(type: Exec, group: 'build', description: ''){
+task getJava (group: 'build', description: 'Downloads Java.'){
 	
 	dependsOn buildResources
 	mustRunAfter buildResources
+	doLast {
+		ant.get(src: 'https://cdn.azul.com/zulu/bin/zulu15.27.17-ca-jre15.0.0-win_x64.zip', dest: 'build', skipexisting: 'true')
+		ant.unzip(src: "$buildDir/zulu15.27.17-ca-jre15.0.0-win_x64.zip", dest: "$buildDir/java")
+	}
+}
+
+task makenativeexec(type: Exec, group: 'build', description: ''){
+	
+	dependsOn getJava
+	mustRunAfter getJava
 	
 	workingDir 'src/main/c/'
     environment "PATH", execPath
@@ -138,6 +148,5 @@ task makenativeexec(type: Exec, group: 'build', description: ''){
 	standardOutput = new ByteArrayOutputStream()
 	ext.output = {
 		return standardOutput.toString()
-	}
-	
+	}	
 }

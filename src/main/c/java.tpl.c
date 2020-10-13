@@ -1,10 +1,14 @@
 #include <jni.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <dirent.h>
 #include <windows.h>
 
 #include "include/java.h"
 #include "include/logging.h"
+
+typedef jint(JNICALL *PtrInitArgs) (void *);
+typedef jint (JNICALL *PtrCreateJavaVM) (JavaVM **, void **, void *);
 
 void listdir(char* directory, char* buff) {
     DIR *d;
@@ -26,13 +30,18 @@ void listdir(char* directory, char* buff) {
     }
 }
 
-int startvm(char* libdir) {
+int startvm(char* libdir, char* jvmpath) {
+
+	wchar_t wJvmPath[MAX_PATH];
+	mbstowcs(wJvmPath, jvmpath, strlen(jvmpath) + 1);
+
+	HINSTANCE hinstLib = LoadLibrary(wJvmPath);
+	PtrCreateJavaVM ptrCreateJavaVM = (PtrCreateJavaVM) GetProcAddress(hinstLib, "JNI_CreateJavaVM");
+	PtrInitArgs ptrGetDefaultJavaVMInitArgs = (PtrInitArgs) GetProcAddress(hinstLib, "JNI_GetDefaultJavaVMInitArgs");
 
 	JavaVM *jvm;
 	JNIEnv *env;
 	JavaVMInitArgs args;
-	JavaVMOption options[1];
-	JNI_GetDefaultJavaVMInitArgs(&args);
 	jstring jstr;
 	jobjectArray main_args;
 	char classpathbuffer[2048];
@@ -40,32 +49,29 @@ int startvm(char* libdir) {
 	/* Generates the classpath into buffer data structure. */
 	listdir(libdir, classpathbuffer);
 
-	options[0].optionString = classpathbuffer;
-	
-	args.nOptions = 1;
+	JavaVMOption options[2];
+	options[0].optionString = "-Dlogback.configurationFile=..\\config\\logback.xml";
+	options[1].optionString = classpathbuffer;
+
+	ptrGetDefaultJavaVMInitArgs(&args);
+	args.nOptions = 2;
 	args.options = options;
 	args.ignoreUnrecognized = JNI_TRUE;
 	args.version = JNI_VERSION_1_8;
 	args.options = options;
 
-	JNI_CreateJavaVM(&jvm, (void**) &env, (void*) &args);
-    
+	ptrCreateJavaVM(&jvm, (void**) &env, &args);
+
 	jclass main_class = (*env)->FindClass(env, "%%MAIN_CLASS%%");
 	jmethodID main_method = (*env)->GetStaticMethodID(env, main_class, "main", "([Ljava/lang/String;)V");
 	if (main_method == NULL) {
-		printf("Failed to find main functionn");
 		return -1;
 	}
-    
+
 	jstr = (*env)->NewStringUTF(env, "10");
 	main_args = (*env)->NewObjectArray(env, 1, (*env)->FindClass(env, "java/lang/String"), jstr);
 	(*env)->CallStaticVoidMethod(env, main_class, main_method, main_args);
-
-	WriteToLog("Pre destroy.", LOG_DEBUG);
-
 	(*jvm)->DestroyJavaVM(jvm);
-
-	WriteToLog("JavaVM terminated.", LOG_DEBUG);
 
 	return 0;
 }
