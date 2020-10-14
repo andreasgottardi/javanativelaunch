@@ -120,14 +120,36 @@ task getJava (group: 'build', description: 'Downloads Java.'){
 	mustRunAfter buildResources
 	doLast {
 		ant.get(src: 'https://cdn.azul.com/zulu/bin/zulu15.27.17-ca-jre15.0.0-win_x64.zip', dest: 'build', skipexisting: 'true')
-		ant.unzip(src: "$buildDir/zulu15.27.17-ca-jre15.0.0-win_x64.zip", dest: "$buildDir/java")
+	}
+}
+
+task extractJava (type: Copy, group: 'build', description: 'Downloads Java.'){
+	
+	dependsOn getJava
+	mustRunAfter getJava
+	
+	from zipTree("$buildDir/zulu15.27.17-ca-jre15.0.0-win_x64.zip")
+    into "$buildDir/java"
+}
+
+task integrateJava (group: 'build', description: 'Downloads Java.'){
+	
+	dependsOn extractJava
+	mustRunAfter extractJava
+	
+	doLast {
+		file("$buildDir/java").listFiles().each { File file ->
+			file.listFiles().each { File cont ->
+	            ant.move file: cont.absolutePath, todir: "${buildDir}/setup/jre"
+	        }
+        }
 	}
 }
 
 task makenativeexec(type: Exec, group: 'build', description: ''){
 	
-	dependsOn getJava
-	mustRunAfter getJava
+	dependsOn integrateJava
+	mustRunAfter integrateJava
 	
 	workingDir 'src/main/c/'
     environment "PATH", execPath
