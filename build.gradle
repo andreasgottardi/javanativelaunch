@@ -9,19 +9,26 @@ targetCompatibility = 1.8
 ext {
 	
 	gcc = MINGW + System.getProperty("file.separator") + 'gcc.exe'
+	make = MINGW + System.getProperty("file.separator") + 'mingw32-make.exe'
 	windres = MINGW + System.getProperty("file.separator") + 'windres.exe'
 	execPath = MINGW + System.getProperty("path.separator") + System.getenv("PATH")
 	
 	/* Load path to JDK from gradle.properties. */
 	javaHome = JAVA_HOME
 	
+	/* Load path to Nsis from gradle.properties. */
+	nsisHome = NSIS_HOME
+	
 	mainClass = 'compilerex.Library'
+	
+	progName = 'JavaNativeLaunch'
+	progVers = '0.0.1'
 	
 	junitvers = '5.7.0'
 }
 
 mainClassName = mainClass
-version = '0.0.1'
+version = progVers
 
 repositories {
     jcenter()
@@ -47,9 +54,7 @@ jar {
 	}
 }
 
-build.dependsOn clean
-build.mustRunAfter clean
-
+/* Exports dependency jar files to the setup/lib directory. */
 task exportDependencies(type: Copy, group: 'distribution', description: 'Exports the application dependencies into a export folder.') {
 
 	dependsOn build
@@ -59,12 +64,13 @@ task exportDependencies(type: Copy, group: 'distribution', description: 'Exports
 	from configurations.runtimeClasspath
 }
 
+/* Exports the generated jar file into the setup/lib folder. */
 tasks.withType(Jar) {
 	destinationDirectory = file("${buildDir}/setup/lib")
 }
 
 /* Deletes an probably existing "java.c" file in "src/main/c" folder. */
-task cleanJavaC(type: Delete, group: 'build', description: 'The gcc build task.') {
+task cleanJavaC(type: Delete, group: 'build', description: 'Deletes previously generated java.c file.') {
 
 	dependsOn exportDependencies
 	mustRunAfter exportDependencies
@@ -73,7 +79,7 @@ task cleanJavaC(type: Delete, group: 'build', description: 'The gcc build task.'
 }
 
 /* Generates a java.c file from the template with the main class name inserted. */
-task generateJavaC(type: Copy, group: 'build', description: 'The gcc build task.') {
+task generateJavaC(type: Copy, group: 'build', description: 'Generates a new java.c file with main class set correctly.') {
 	
 	dependsOn cleanJavaC
 	mustRunAfter cleanJavaC
@@ -86,8 +92,8 @@ task generateJavaC(type: Copy, group: 'build', description: 'The gcc build task.
 	rename('java.tpl.c', 'java.c')
 }
 
-/* Deletes an probably existing "java.c" file in "src/main/c" folder. */
-task cleanResources(type: Delete, group: 'build', description: '') {
+/* Deletes existing resources and setup files. */
+task cleanResources(type: Delete, group: 'build', description: 'Deletes existing resources and setup files.') {
 
 	dependsOn generateJavaC
 	mustRunAfter generateJavaC
@@ -103,7 +109,8 @@ task cleanResources(type: Delete, group: 'build', description: '') {
     }
 }
 
-task buildResources(type: Exec, group: 'build', description: ''){
+/* Builds the .res files with 'windres'. */
+task buildResources(type: Exec, group: 'build', description: 'Builds the .res files.'){
     
 	dependsOn cleanResources
 	mustRunAfter cleanResources
@@ -114,16 +121,15 @@ task buildResources(type: Exec, group: 'build', description: ''){
     commandLine windres, 'resources.rc', '-O', 'coff', '-o', 'resources.res'
 }
 
+/* Downloads Java. */
 task getJava (group: 'build', description: 'Downloads Java.'){
-	
-	dependsOn buildResources
-	mustRunAfter buildResources
 	doLast {
 		ant.get(src: 'https://cdn.azul.com/zulu/bin/zulu15.27.17-ca-jre15.0.0-win_x64.zip', dest: 'build', skipexisting: 'true')
 	}
 }
 
-task extractJava (type: Copy, group: 'build', description: 'Downloads Java.'){
+/* Extracts Java. */
+task extractJava (type: Copy, group: 'build', description: 'Extracts Java.'){
 	
 	dependsOn getJava
 	mustRunAfter getJava
@@ -132,7 +138,8 @@ task extractJava (type: Copy, group: 'build', description: 'Downloads Java.'){
     into "$buildDir/java"
 }
 
-task integrateJava (group: 'build', description: 'Downloads Java.'){
+/* Integrate Java into setup folder. */
+task integrateJava (group: 'build', description: 'Integrates Java into setup folder.'){
 	
 	dependsOn extractJava
 	mustRunAfter extractJava
@@ -146,29 +153,38 @@ task integrateJava (group: 'build', description: 'Downloads Java.'){
 	}
 }
 
-task makenativeexec(type: Exec, group: 'build', description: ''){
+/* Compiles exe file using gcc. */
+task makenativeexec(type: Exec, group: 'build', description: 'Compiles exe file using gcc.'){
 	
-	dependsOn integrateJava
-	mustRunAfter integrateJava
+	dependsOn buildResources
+	mustRunAfter buildResources
 	
 	workingDir 'src/main/c/'
     environment "PATH", execPath
     
-	commandLine gcc,
-	'-I"' + javaHome + '\\include"',
-	'-I"' + javaHome + '\\include\\win32"',
-	'-o', "$buildDir/setup/bin/" + 'runme.exe',
-	'-Wall',
-	'-Os',
-	'-pedantic',
-	'-municode',
-	'-mwindows',
-	'main.c', 'java.c', 'logging.c', 'resources.res',
-	'-L"' + javaHome + '\\lib"',
-	'-ljvm'
+	commandLine make,
+	'all',
+	'JAVAPATH=' + javaHome,
+	'TARGETPATH=' + "${buildDir}/setup/bin"
 	
 	standardOutput = new ByteArrayOutputStream()
 	ext.output = {
 		return standardOutput.toString()
 	}	
+}
+
+/* Creates the nsis setup. */
+task buildsetup(type: Exec, group: 'build', description: 'Creates the nsis setup.'){
+	
+	dependsOn makenativeexec, integrateJava
+	mustRunAfter makenativeexec
+	
+	workingDir 'src/main/nsis'
+    
+    commandLine nsisHome + '\\bin\\makensis.exe',
+    '/DPROG_NAME=' + progName,
+	'/DVERSION=' + progVers,
+	'/DOUTDIR=' + "$buildDir\\setup",
+	'setup.nsi'
+
 }
