@@ -10,7 +10,6 @@ ext {
 	
 	gcc = MINGW + System.getProperty("file.separator") + 'gcc.exe'
 	make = MINGW + System.getProperty("file.separator") + 'mingw32-make.exe'
-	windres = MINGW + System.getProperty("file.separator") + 'windres.exe'
 	execPath = MINGW + System.getProperty("path.separator") + System.getenv("PATH")
 	
 	/* Load path to JDK from gradle.properties. */
@@ -109,19 +108,6 @@ task cleanResources(type: Delete, group: 'build', description: 'Deletes existing
     }
 }
 
-/* Builds the .res files with 'windres'. */
-task buildResources(type: Exec, group: 'build', description: 'Builds the .res files.'){
-    
-	dependsOn cleanResources
-	mustRunAfter cleanResources
-
-	workingDir 'src/main/c/'
-    environment "PATH", execPath
-	
-	/* Quotation marks are added in case the target system contains spaces in the path to windres.exe. */
-    commandLine '"' + windres + '"', 'resources.rc', '-O', 'coff', '-o', 'resources.res'
-}
-
 /* Downloads Java. */
 task getJava (group: 'build', description: 'Downloads Java.'){
 	doLast {
@@ -157,13 +143,12 @@ task integrateJava (group: 'build', description: 'Integrates Java into setup fol
 /* Compiles exe file using gcc. */
 task makenativeexec(type: Exec, group: 'build', description: 'Compiles exe file using gcc.'){
 	
-	dependsOn buildResources
-	mustRunAfter buildResources
-	
 	workingDir 'src/main/c/'
     environment "PATH", execPath
     
-	commandLine '"' + make + '"',
+    mkdir "$buildDir/setup/bin"
+    
+	commandLine make,
 	'all',
 	'JAVAPATH=' + javaHome,
 	'TARGETPATH=' + "${buildDir}/setup/bin"
@@ -177,7 +162,7 @@ task makenativeexec(type: Exec, group: 'build', description: 'Compiles exe file 
 /* Creates the nsis setup. */
 task buildsetup(type: Exec, group: 'build', description: 'Creates the nsis setup.'){
 	
-	dependsOn makenativeexec, integrateJava
+	dependsOn makenativeexec, integrateJava, jar, exportDependencies
 	mustRunAfter makenativeexec
 	
 	workingDir 'src/main/nsis'
