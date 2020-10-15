@@ -117,8 +117,9 @@ task buildResources(type: Exec, group: 'build', description: 'Builds the .res fi
 
 	workingDir 'src/main/c/'
     environment "PATH", execPath
-
-    commandLine windres, 'resources.rc', '-O', 'coff', '-o', 'resources.res'
+	
+	/* Quotation marks are added in case the target system contains spaces in the path to windres.exe. */
+    commandLine '"' + windres + '"', 'resources.rc', '-O', 'coff', '-o', 'resources.res'
 }
 
 /* Downloads Java. */
@@ -162,7 +163,7 @@ task makenativeexec(type: Exec, group: 'build', description: 'Compiles exe file 
 	workingDir 'src/main/c/'
     environment "PATH", execPath
     
-	commandLine make,
+	commandLine '"' + make + '"',
 	'all',
 	'JAVAPATH=' + javaHome,
 	'TARGETPATH=' + "${buildDir}/setup/bin"
@@ -181,7 +182,7 @@ task buildsetup(type: Exec, group: 'build', description: 'Creates the nsis setup
 	
 	workingDir 'src/main/nsis'
     
-    commandLine nsisHome + '\\bin\\makensis.exe',
+    commandLine '"' + nsisHome + '\\bin\\makensis.exe' + '"',
     '/DPROG_NAME=' + progName,
 	'/DVERSION=' + progVers,
 	'/DOUTDIR=' + "$buildDir\\setup",
